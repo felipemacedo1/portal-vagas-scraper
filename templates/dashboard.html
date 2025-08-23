@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Vagas Scraper</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .stat-number { font-size: 2em; font-weight: bold; color: #3498db; }
+        .form-section { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
+        button { background: #3498db; color: white; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #2980b9; }
+        .export-btn { background: #27ae60; margin-left: 10px; }
+        .export-btn:hover { background: #229954; }
+        .message { padding: 15px; margin: 15px 0; border-radius: 4px; }
+        .message.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .message.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .section { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .section h3 { margin-bottom: 15px; color: #2c3e50; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; font-weight: bold; }
+        .status-completed { color: #27ae60; font-weight: bold; }
+        .status-failed { color: #e74c3c; font-weight: bold; }
+        .job-link { color: #3498db; text-decoration: none; }
+        .job-link:hover { text-decoration: underline; }
+        .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
+        .filters-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 15px; }
+        .chart-container { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .auto-refresh { position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; }
+        .loading { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 8px; z-index: 1000; }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto 10px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @media (max-width: 768px) {
+            .form-row { grid-template-columns: 1fr; }
+            .filters-row { grid-template-columns: 1fr; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Portal Vagas Scraper</h1>
+            <p>Sistema de coleta automatizada de vagas de emprego</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.total_jobs }}</div>
+                <div>Total Vagas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.jobs_today }}</div>
+                <div>Hoje</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.jobs_week }}</div>
+                <div>Esta Semana</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.total_runs }}</div>
+                <div>Execuções</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.successful_runs }}</div>
+                <div>Sucessos</div>
+            </div>
+        </div>
+
+        <div class="auto-refresh" id="autoRefresh">🔄 Auto-refresh: ON</div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div>Buscando vagas...</div>
+        </div>
+        
+        {% if message %}
+        <div class="message {{ 'success' if '✅' in message else 'error' }}">
+            {{ message }}
+        </div>
+        {% endif %}
+        
+        <div class="chart-container">
+            <h3>📈 Vagas por Dia (Última Semana)</h3>
+            <canvas id="jobsChart" width="400" height="100"></canvas>
+        </div>
+
+        <div class="form-section">
+            <h3>🔍 Buscar Vagas</h3>
+            <form method="post" action="/scrape">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="keyword">Palavra-chave:</label>
+                        <input type="text" id="keyword" name="keyword" placeholder="Ex: desenvolvedor java" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="site">Site:</label>
+                        <select id="site" name="site">
+                            <option value="infojobs">InfoJobs</option>
+                            <option value="gupy">Gupy</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="days">Dias atrás:</label>
+                        <select id="days" name="days">
+                            <option value="1">1 dia</option>
+                            <option value="3">3 dias</option>
+                            <option value="7">7 dias</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <button type="submit">Buscar</button>
+                        <a href="/export/csv" class="export-btn" style="display: inline-block; text-decoration: none; color: white;">📥 CSV</a>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="send_telegram" value="true"> Enviar para Telegram
+                    </label>
+                </div>
+            </form>
+        </div>
+
+        <div class="section">
+            <h3>📊 Últimas Execuções</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Palavra-chave</th>
+                        <th>Site</th>
+                        <th>Vagas</th>
+                        <th>Status</th>
+                        <th>Data</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in recent_runs %}
+                    <tr>
+                        <td>{{ run.keyword }}</td>
+                        <td>{{ run.source }}</td>
+                        <td>{{ run.jobs_found }}</td>
+                        <td class="status-{{ run.status }}">{{ run.status }}</td>
+                        <td>{{ run.created_at.strftime('%d/%m %H:%M') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h3>💼 Vagas Recentes</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Título</th>
+                        <th>Fonte</th>
+                        <th>Data</th>
+                        <th>Link</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in recent_jobs %}
+                    <tr>
+                        <td>{{ job.title }}</td>
+                        <td>{{ job.source }}</td>
+                        <td>{{ job.scraped_at.strftime('%d/%m %H:%M') }}</td>
+                        <td><a href="{{ job.link }}" target="_blank" class="job-link">Ver vaga</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
