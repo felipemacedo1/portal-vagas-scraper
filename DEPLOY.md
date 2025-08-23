@@ -11,7 +11,7 @@ Para fazer o deploy no GitHub:
 # Descrição: 🚀 Sistema avançado de scraping de vagas com interface web, filtros inteligentes e notificações Telegram
 
 # 2. Configurar remote
-git remote set-url origin https://github.com/SEU_USERNAME/portal-vagas-scraper.git
+git remote set-url origin https://github.com/felipemacedo1/portal-vagas-scraper.git
 
 # 3. Push inicial
 git push -u origin main
@@ -22,7 +22,7 @@ git push -u origin main
 ### Produção
 ```bash
 # 1. Clone o repositório
-git clone https://github.com/SEU_USERNAME/portal-vagas-scraper.git
+git clone https://github.com/felipemacedo1/portal-vagas-scraper.git
 cd portal-vagas-scraper
 
 # 2. Configure produção
@@ -49,7 +49,7 @@ sudo apt install docker.io docker-compose -y
 sudo usermod -aG docker $USER
 
 # 2. Clone e execute
-git clone https://github.com/SEU_USERNAME/portal-vagas-scraper.git
+git clone https://github.com/felipemacedo1/portal-vagas-scraper.git
 cd portal-vagas-scraper
 cp .env.example .env
 # Configure .env

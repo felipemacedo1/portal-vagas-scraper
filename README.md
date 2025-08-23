@@ -34,6 +34,12 @@ Sistema avançado de scraping automatizado para coleta de vagas de emprego, inte
 - ✅ **Timeout Configurável** - Evita travamentos
 - ✅ **Retry Automático** - Recuperação de falhas
 
+## 🌐 Links
+
+🔗 **Repositório**: [github.com/felipemacedo1/portal-vagas-scraper](https://github.com/felipemacedo1/portal-vagas-scraper)
+📚 **Documentação API**: `http://localhost:8082/docs` (após instalação)
+📊 **Dashboard**: `http://localhost:8082` (interface principal)
+
 ## 🐳 Instalação Rápida (Docker)
 
 ```bash
