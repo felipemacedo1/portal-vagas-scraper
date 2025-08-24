@@ -7,6 +7,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from datetime import datetime, timedelta
 from loguru import logger
 from .cache import job_cache
+from .ai_filter import AIJobFilter
+from .scrapers.linkedin_scraper import LinkedInScraper
+from .scrapers.catho_scraper import CathoScraper
 from concurrent.futures import ThreadPoolExecutor
 import os
 import time
@@ -16,6 +19,9 @@ class JobScraper:
         self.selenium_hub_url = selenium_hub_url or os.getenv('SELENIUM_HUB_URL', 'http://localhost:4444/wd/hub')
         self.headless = os.getenv('CHROME_HEADLESS', 'true').lower() == 'true'
         self.delay = int(os.getenv('SCRAPING_DELAY', '2'))
+        self.ai_filter = AIJobFilter()
+        self.linkedin_scraper = LinkedInScraper()
+        self.catho_scraper = CathoScraper()
         
     def _create_driver(self):
         options = Options()
@@ -99,6 +105,58 @@ class JobScraper:
             
         logger.info(f"Found {len(jobs)} new jobs for '{keyword}'")
         return jobs
+    
+    def scrape_linkedin(self, keyword: str, days_back: int = 1, location: str = "", filters: dict = None) -> list:
+        """Scrape LinkedIn jobs"""
+        driver = self._create_driver()
+        try:
+            jobs = self.linkedin_scraper.scrape_jobs(driver, keyword, location, days_back)
+            if filters:
+                jobs = self.ai_filter.filter_jobs(jobs, filters)
+            return jobs
+        finally:
+            driver.quit()
+    
+    def scrape_catho(self, keyword: str, days_back: int = 1, location: str = "", filters: dict = None) -> list:
+        """Scrape Catho jobs"""
+        driver = self._create_driver()
+        try:
+            jobs = self.catho_scraper.scrape_jobs(driver, keyword, location, days_back)
+            if filters:
+                jobs = self.ai_filter.filter_jobs(jobs, filters)
+            return jobs
+        finally:
+            driver.quit()
+    
+    def scrape_all_sites(self, keyword: str, sites: list = None, filters: dict = None) -> list:
+        """Scrape multiple sites in parallel"""
+        if not sites:
+            sites = ['infojobs', 'linkedin', 'catho']
+        
+        all_jobs = []
+        
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = []
+            
+            if 'infojobs' in sites:
+                futures.append(executor.submit(self.scrape_infojobs, keyword, 1, "", filters))
+            if 'linkedin' in sites:
+                futures.append(executor.submit(self.scrape_linkedin, keyword, 1, "", filters))
+            if 'catho' in sites:
+                futures.append(executor.submit(self.scrape_catho, keyword, 1, "", filters))
+            
+            for future in futures:
+                try:
+                    jobs = future.result(timeout=60)
+                    all_jobs.extend(jobs)
+                except Exception as e:
+                    logger.error(f"Scraping failed: {e}")
+        
+        # Apply final AI filtering
+        if filters:
+            all_jobs = self.ai_filter.filter_jobs(all_jobs, filters)
+        
+        return all_jobs
 
     def _scroll_page(self, driver):
         last_height = driver.execute_script("return document.body.scrollHeight")

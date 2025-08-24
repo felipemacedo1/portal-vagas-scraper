@@ -37,7 +37,11 @@ Sistema avançado de scraping automatizado para coleta de vagas de emprego, inte
 ## 🌐 Links
 
 🔗 **Repositório**: [github.com/felipemacedo1/portal-vagas-scraper](https://github.com/felipemacedo1/portal-vagas-scraper)
-📚 **Documentação API**: `http://localhost:8082/docs` (após instalação)
+📚 **Documentação**:
+  - **API Interativa**: `http://localhost:8082/docs` (Swagger UI)
+  - **API Reference**: [docs/API.md](docs/API.md)
+  - **Screenshots**: [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md)
+  - **Deploy Guide**: [DEPLOY.md](DEPLOY.md)
 📊 **Dashboard**: `http://localhost:8082` (interface principal)
 
 ## 🐳 Instalação Rápida (Docker)

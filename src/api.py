@@ -6,12 +6,18 @@ from .scraper import JobScraper
 from .telegram_bot import TelegramNotifier
 from .database import get_db, ScrapingRun, ScrapedJob, init_db
 from .web import add_web_routes
+from .smart_scheduler import SmartScheduler
+from .auto_search_manager import AutoSearchManager
 from datetime import datetime
 from loguru import logger
 import os
 
 app = FastAPI(title="Portal Vagas Scraper API", version="1.0.0")
 add_web_routes(app)
+
+# Inicializar componentes inteligentes
+smart_scheduler = SmartScheduler()
+search_manager = AutoSearchManager()
 
 class ScrapeRequest(BaseModel):
     sites: List[str] = ["infojobs"]
@@ -27,7 +33,8 @@ class ScrapeResponse(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     init_db()
-    logger.info("API started")
+    smart_scheduler.start()  # Iniciar buscas automatizadas
+    logger.info("API started with automated searches")
 
 @app.post("/api/scrape", response_model=ScrapeResponse)
 async def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
@@ -104,3 +111,26 @@ async def get_jobs(limit: int = 50, db: Session = Depends(get_db)):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow()}
+
+@app.get("/api/auto-searches")
+async def get_automated_searches():
+    """Ver matriz de buscas automatizadas"""
+    return {
+        "search_matrix": search_manager.get_search_matrix(),
+        "regional_stats": search_manager.get_regional_stats(),
+        "next_executions": smart_scheduler.get_next_searches()
+    }
+
+@app.post("/api/auto-searches/add")
+async def add_custom_search(keywords: List[str], regions: List[str], schedule: str, priority: int = 3):
+    """Adicionar busca personalizada"""
+    profile_id = search_manager.add_custom_profile(keywords, regions, schedule, priority)
+    smart_scheduler.setup_automated_searches()  # Reconfigurar
+    return {"profile_id": profile_id, "status": "added"}
+
+@app.post("/api/auto-searches/execute-now")
+async def execute_high_priority_now():
+    """Executar buscas de alta prioridade imediatamente"""
+    searches = search_manager.get_high_priority_searches()
+    await smart_scheduler._execute_batch_search(searches)
+    return {"executed_searches": len(searches), "status": "completed"}

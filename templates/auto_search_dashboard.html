@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscas Automatizadas - Portal Vagas</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .matrix-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; }
+        .search-item { background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #3498db; }
+        .priority-5 { border-left-color: #e74c3c; }
+        .priority-4 { border-left-color: #f39c12; }
+        .priority-3 { border-left-color: #3498db; }
+        .priority-2 { border-left-color: #27ae60; }
+        .btn { background: #3498db; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #2980b9; }
+        .btn-success { background: #27ae60; }
+        .btn-warning { background: #f39c12; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-number { font-size: 2em; font-weight: bold; color: #3498db; }
+        .region-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+        .region-item { background: #ecf0f1; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Buscas Automatizadas</h1>
+            <p>Sistema inteligente de busca por palavras-chave e regiões</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalSearches">0</div>
+                <div>Total Buscas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="activeProfiles">0</div>
+                <div>Perfis Ativos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="regionsCount">0</div>
+                <div>Regiões</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="nextExecution">--:--</div>
+                <div>Próxima Execução</div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>🎯 Matriz de Buscas Ativas</h3>
+                <button class="btn btn-success" onclick="executeNow()">▶️ Executar Agora</button>
+                <button class="btn" onclick="loadData()">🔄 Atualizar</button>
+                <div id="searchMatrix" class="matrix-grid" style="margin-top: 15px;"></div>
+            </div>
+
+            <div class="card">
+                <h3>📍 Estatísticas por Região</h3>
+                <div id="regionalStats" class="region-stats"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>⏰ Próximas Execuções</h3>
+            <div id="nextExecutions"></div>
+        </div>
+
+        <div class="card">
+            <h3>➕ Adicionar Busca Personalizada</h3>
+            <form onsubmit="addCustomSearch(event)">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; margin-bottom: 10px;">
+                    <input type="text" id="keywords" placeholder="Palavras-chave (separadas por vírgula)" required>
+                    <input type="text" id="regions" placeholder="Regiões (separadas por vírgula)" required>
+                    <input type="text" id="schedule" placeholder="Cron (ex: 0 9 * * *)" required>
+                    <select id="priority">
+                        <option value="3">Normal</option>
+                        <option value="4">Alta</option>
+                        <option value="5">Crítica</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn">Adicionar</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        async function loadData() {
+            try {
+                const response = await fetch('/api/auto-searches');
+                const data = await response.json();
+                
+                updateStats(data);
+                renderSearchMatrix(data.search_matrix);
+                renderRegionalStats(data.regional_stats);
+                renderNextExecutions(data.next_executions);
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+            }
+        }
+
+        function updateStats(data) {
+            document.getElementById('totalSearches').textContent = data.search_matrix.length;
+            document.getElementById('activeProfiles').textContent = new Set(data.search_matrix.map(s => s.profile_id)).size;
+            document.getElementById('regionsCount').textContent = Object.keys(data.regional_stats).length;
+            
+            if (data.next_executions.length > 0) {
+                const next = new Date(data.next_executions[0].next_run);
+                document.getElementById('nextExecution').textContent = next.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+            }
+        }
+
+        function renderSearchMatrix(searches) {
+            const container = document.getElementById('searchMatrix');
+            container.innerHTML = '';
+            
+            searches.forEach(search => {
+                const div = document.createElement('div');
+                div.className = `search-item priority-${search.priority}`;
+                div.innerHTML = `
+                    <strong>${search.keyword}</strong><br>
+                    📍 ${search.region}<br>
+                    ⏰ ${search.schedule}<br>
+                    ⭐ Prioridade: ${search.priority}
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderRegionalStats(stats) {
+            const container = document.getElementById('regionalStats');
+            container.innerHTML = '';
+            
+            Object.entries(stats).forEach(([region, data]) => {
+                const div = document.createElement('div');
+                div.className = 'region-item';
+                div.innerHTML = `
+                    <strong>${region}</strong><br>
+                    ${data.keywords} palavras-chave<br>
+                    Score: ${data.priority_sum}
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderNextExecutions(executions) {
+            const container = document.getElementById('nextExecutions');
+            container.innerHTML = '';
+            
+            executions.forEach(exec => {
+                const div = document.createElement('div');
+                div.style.cssText = 'padding: 10px; margin: 5px 0; background: #f8f9fa; border-radius: 4px;';
+                const nextRun = new Date(exec.next_run);
+                div.innerHTML = `
+                    <strong>${exec.id}</strong><br>
+                    🕐 ${nextRun.toLocaleString('pt-BR')}<br>
+                    📊 ${exec.searches_count} buscas
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function executeNow() {
+            try {
+                const response = await fetch('/api/auto-searches/execute-now', {method: 'POST'});
+                const result = await response.json();
+                alert(`✅ ${result.executed_searches} buscas executadas!`);
+                loadData();
+            } catch (error) {
+                alert('❌ Erro ao executar buscas');
+            }
+        }
+
+        async function addCustomSearch(event) {
+            event.preventDefault();
+            
+            const keywords = document.getElementById('keywords').value.split(',').map(k => k.trim());
+            const regions = document.getElementById('regions').value.split(',').map(r => r.trim());
+            const schedule = document.getElementById('schedule').value;
+            const priority = parseInt(document.getElementById('priority').value);
+            
+            try {
+                const response = await fetch('/api/auto-searches/add', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({keywords, regions, schedule, priority})
+                });
+                
+                const result = await response.json();
+                alert('✅ Busca personalizada adicionada!');
+                event.target.reset();
+                loadData();
+            } catch (error) {
+                alert('❌ Erro ao adicionar busca');
+            }
+        }
+
+        // Auto-refresh a cada 30 segundos
+        setInterval(loadData, 30000);
+        
+        // Carregar dados iniciais
+        loadData();
+    </script>
+</body>
+</html>
