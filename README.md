@@ -38,11 +38,11 @@ Sistema avançado de scraping automatizado para coleta de vagas de emprego, inte
 
 🔗 **Repositório**: [github.com/felipemacedo1/portal-vagas-scraper](https://github.com/felipemacedo1/portal-vagas-scraper)
 📚 **Documentação**:
-  - **API Interativa**: `http://localhost:8082/docs` (Swagger UI)
+  - **API Interativa**: `http://localhost:8081/docs` (Swagger UI)
   - **API Reference**: [docs/API.md](docs/API.md)
   - **Screenshots**: [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md)
   - **Deploy Guide**: [DEPLOY.md](DEPLOY.md)
-📊 **Dashboard**: `http://localhost:8082` (interface principal)
+📊 **Dashboard**: `http://localhost:8081` (interface principal)
 
 ## 🐳 Instalação Rápida (Docker)
 
@@ -59,7 +59,7 @@ cp .env.example .env
 docker-compose up -d
 
 # Acesse a interface
-open http://localhost:8082
+open http://localhost:8081
 ```
 
 ## 🐧 Instalação Ubuntu/Linux
@@ -94,7 +94,7 @@ MAX_JOBS_PER_RUN=20
 SELENIUM_HUB_URL=http://chrome:4444/wd/hub
 
 # API Config
-API_PORT=8082
+API_PORT=8081
 API_HOST=0.0.0.0
 API_SECRET_KEY=your_secret_key_here
 ```
@@ -110,7 +110,7 @@ API_SECRET_KEY=your_secret_key_here
 
 ### 🌐 Interface Web (Recomendado)
 
-1. **Acesse**: http://localhost:8082
+1. **Acesse**: http://localhost:8081
 2. **Digite** palavra-chave (ex: "desenvolvedor java")
 3. **Configure** filtros (localização, salário, etc.)
 4. **Clique** "🔍 Buscar"
@@ -121,7 +121,7 @@ API_SECRET_KEY=your_secret_key_here
 
 ```bash
 # Executar scraping
-curl -X POST "http://localhost:8082/api/scrape" \
+curl -X POST "http://localhost:8081/api/scrape" \
   -H "Content-Type: application/json" \
   -d '{
     "keywords": ["desenvolvedor java"],
@@ -131,13 +131,13 @@ curl -X POST "http://localhost:8082/api/scrape" \
   }'
 
 # Listar vagas
-curl "http://localhost:8082/api/jobs"
+curl "http://localhost:8081/api/jobs"
 
 # Exportar CSV
-curl "http://localhost:8082/export/csv" -o vagas.csv
+curl "http://localhost:8081/export/csv" -o vagas.csv
 
 # Documentação completa
-open http://localhost:8082/docs
+open http://localhost:8081/docs
 ```
 
 ## 🏗️ Arquitetura

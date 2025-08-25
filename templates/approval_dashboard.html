@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Aprovação - Portal Vagas</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .stat-number { font-size: 2em; font-weight: bold; }
+        .pending { color: #f39c12; }
+        .approved { color: #27ae60; }
+        .rejected { color: #e74c3c; }
+        .auto { color: #3498db; }
+        .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .job-item { border: 1px solid #ddd; border-radius: 6px; padding: 15px; margin-bottom: 10px; position: relative; }
+        .job-item.selected { border-color: #3498db; background: #f8f9fa; }
+        .job-header { display: flex; justify-content: between; align-items: center; margin-bottom: 10px; }
+        .job-title { font-weight: bold; font-size: 1.1em; color: #2c3e50; }
+        .job-meta { color: #666; font-size: 0.9em; margin-bottom: 10px; }
+        .quality-score { position: absolute; top: 10px; right: 10px; background: #3498db; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.8em; }
+        .quality-high { background: #27ae60; }
+        .quality-medium { background: #f39c12; }
+        .quality-low { background: #e74c3c; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-warning { background: #f39c12; color: white; }
+        .actions { display: flex; gap: 10px; margin-bottom: 20px; }
+        .checkbox { margin-right: 10px; }
+        .bulk-actions { background: #ecf0f1; padding: 15px; border-radius: 6px; margin-bottom: 20px; }
+        .rejection-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; width: 400px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Sistema de Aprovação de Vagas</h1>
+            <p>Revise e aprove vagas antes de publicar no portal</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number pending" id="pendingCount">0</div>
+                <div>Pendentes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number approved" id="approvedCount">0</div>
+                <div>Aprovadas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number rejected" id="rejectedCount">0</div>
+                <div>Rejeitadas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number auto" id="autoCount">0</div>
+                <div>Auto-aprovadas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="approvalRate">0%</div>
+                <div>Taxa Aprovação</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="bulk-actions">
+                <h3>Ações em Lote</h3>
+                <div class="actions">
+                    <button class="btn btn-primary" onclick="selectAll()">Selecionar Todos</button>
+                    <button class="btn btn-success" onclick="approveSelected()">Aprovar Selecionadas</button>
+                    <button class="btn btn-danger" onclick="showRejectModal()">Rejeitar Selecionadas</button>
+                    <button class="btn btn-warning" onclick="sendToPortal()">Enviar para Portal</button>
+                </div>
+                <div id="selectedCount">0 vagas selecionadas</div>
+            </div>
+
+            <h3>Vagas Pendentes de Aprovação</h3>
+            <div id="pendingJobs"></div>
+        </div>
+    </div>
+
+    <!-- Modal de Rejeição -->
+    <div id="rejectionModal" class="rejection-modal">
+        <div class="modal-content">
+            <h3>Motivo da Rejeição</h3>
+            <textarea id="rejectionReason" placeholder="Digite o motivo da rejeição..." style="width: 100%; height: 100px; margin: 10px 0; padding: 10px;"></textarea>
+            <div>
+                <button class="btn btn-danger" onclick="rejectSelected()">Confirmar Rejeição</button>
+                <button class="btn" onclick="hideRejectModal()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedJobs = new Set();
+        let allJobs = [];
+
+        async function loadData() {
+            try {
+                // Carregar estatísticas
+                const statsResponse = await fetch('/api/approval/stats');
+                const stats = await statsResponse.json();
+                updateStats(stats);
+
+                // Carregar vagas pendentes
+                const jobsResponse = await fetch('/api/approval/pending');
+                const jobs = await jobsResponse.json();
+                allJobs = jobs;
+                renderPendingJobs(jobs);
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+            }
+        }
+
+        function updateStats(stats) {
+            document.getElementById('pendingCount').textContent = stats.pending;
+            document.getElementById('approvedCount').textContent = stats.approved;
+            document.getElementById('rejectedCount').textContent = stats.rejected;
+            document.getElementById('autoCount').textContent = stats.auto_approved;
+            document.getElementById('approvalRate').textContent = stats.approval_rate + '%';
+        }
+
+        function renderPendingJobs(jobs) {
+            const container = document.getElementById('pendingJobs');
+            container.innerHTML = '';
+
+            jobs.forEach(job => {
+                const div = document.createElement('div');
+                div.className = 'job-item';
+                div.dataset.jobId = job.id;
+
+                const qualityClass = job.quality_score >= 7 ? 'quality-high' : 
+                                   job.quality_score >= 4 ? 'quality-medium' : 'quality-low';
+
+                div.innerHTML = `
+                    <input type="checkbox" class="checkbox" onchange="toggleSelection(${job.id})">
+                    <div class="quality-score ${qualityClass}">${job.quality_score}</div>
+                    <div class="job-header">
+                        <div class="job-title">${job.title}</div>
+                    </div>
+                    <div class="job-meta">
+                        🏢 ${job.company || 'N/A'} | 📍 ${job.location || 'N/A'} | 🌐 ${job.source}
+                        <br>📅 ${new Date(job.scraped_at).toLocaleString('pt-BR')}
+                    </div>
+                    <div class="actions">
+                        <button class="btn btn-success" onclick="approveSingle(${job.id})">✅ Aprovar</button>
+                        <button class="btn btn-danger" onclick="rejectSingle(${job.id})">❌ Rejeitar</button>
+                        <a href="${job.link}" target="_blank" class="btn btn-primary">🔗 Ver Original</a>
+                    </div>
+                `;
+
+                container.appendChild(div);
+            });
+        }
+
+        function toggleSelection(jobId) {
+            const checkbox = document.querySelector(`[data-job-id="${jobId}"] .checkbox`);
+            const jobItem = document.querySelector(`[data-job-id="${jobId}"]`);
+            
+            if (checkbox.checked) {
+                selectedJobs.add(jobId);
+                jobItem.classList.add('selected');
+            } else {
+                selectedJobs.delete(jobId);
+                jobItem.classList.remove('selected');
+            }
+            
+            updateSelectedCount();
+        }
+
+        function selectAll() {
+            const checkboxes = document.querySelectorAll('.job-item .checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = true;
+                const jobId = parseInt(checkbox.closest('.job-item').dataset.jobId);
+                selectedJobs.add(jobId);
+                checkbox.closest('.job-item').classList.add('selected');
+            });
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            document.getElementById('selectedCount').textContent = `${selectedJobs.size} vagas selecionadas`;
+        }
+
+        async function approveSelected() {
+            if (selectedJobs.size === 0) {
+                alert('Selecione pelo menos uma vaga');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/approval/approve', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        job_ids: Array.from(selectedJobs),
+                        reviewer: 'admin'
+                    })
+                });
+
+                const result = await response.json();
+                alert(`✅ ${result.approved} vagas aprovadas!`);
+                selectedJobs.clear();
+                loadData();
+            } catch (error) {
+                alert('❌ Erro ao aprovar vagas');
+            }
+        }
+
+        function showRejectModal() {
+            if (selectedJobs.size === 0) {
+                alert('Selecione pelo menos uma vaga');
+                return;
+            }
+            document.getElementById('rejectionModal').style.display = 'block';
+        }
+
+        function hideRejectModal() {
+            document.getElementById('rejectionModal').style.display = 'none';
+            document.getElementById('rejectionReason').value = '';
+        }
+
+        async function rejectSelected() {
+            const reason = document.getElementById('rejectionReason').value;
+            if (!reason.trim()) {
+                alert('Digite o motivo da rejeição');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/approval/reject', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        job_ids: Array.from(selectedJobs),
+                        reason: reason,
+                        reviewer: 'admin'
+                    })
+                });
+
+                const result = await response.json();
+                alert(`❌ ${result.rejected} vagas rejeitadas!`);
+                selectedJobs.clear();
+                hideRejectModal();
+                loadData();
+            } catch (error) {
+                alert('❌ Erro ao rejeitar vagas');
+            }
+        }
+
+        async function approveSingle(jobId) {
+            try {
+                const response = await fetch('/api/approval/approve', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        job_ids: [jobId],
+                        reviewer: 'admin'
+                    })
+                });
+
+                const result = await response.json();
+                alert('✅ Vaga aprovada!');
+                loadData();
+            } catch (error) {
+                alert('❌ Erro ao aprovar vaga');
+            }
+        }
+
+        async function rejectSingle(jobId) {
+            const reason = prompt('Motivo da rejeição:');
+            if (!reason) return;
+
+            try {
+                const response = await fetch('/api/approval/reject', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        job_ids: [jobId],
+                        reason: reason,
+                        reviewer: 'admin'
+                    })
+                });
+
+                const result = await response.json();
+                alert('❌ Vaga rejeitada!');
+                loadData();
+            } catch (error) {
+                alert('❌ Erro ao rejeitar vaga');
+            }
+        }
+
+        async function sendToPortal() {
+            if (selectedJobs.size === 0) {
+                alert('Selecione pelo menos uma vaga aprovada');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/portal-integration/send-jobs', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        job_ids: Array.from(selectedJobs),
+                        auto_approve: false
+                    })
+                });
+
+                const result = await response.json();
+                alert(`🚀 ${result.sent} vagas enviadas para o portal!`);
+                selectedJobs.clear();
+                loadData();
+            } catch (error) {
+                alert('❌ Erro ao enviar vagas para o portal');
+            }
+        }
+
+        // Auto-refresh a cada 30 segundos
+        setInterval(loadData, 30000);
+        
+        // Carregar dados iniciais
+        loadData();
+    </script>
+</body>
+</html>

@@ -147,3 +147,17 @@ def add_web_routes(app):
             media_type='text/csv',
             headers={'Content-Disposition': 'attachment; filename=vagas.csv'}
         )
+    
+    @app.get("/approval-dashboard", response_class=HTMLResponse)
+    async def approval_dashboard(request: Request):
+        """Dashboard de aprovação de vagas"""
+        return templates.TemplateResponse("approval_dashboard.html", {
+            "request": request
+        })
+    
+    @app.get("/auto-search-dashboard", response_class=HTMLResponse)
+    async def auto_search_dashboard(request: Request):
+        """Dashboard de buscas automatizadas"""
+        return templates.TemplateResponse("auto_search_dashboard.html", {
+            "request": request
+        })

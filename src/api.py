@@ -8,6 +8,8 @@ from .database import get_db, ScrapingRun, ScrapedJob, init_db
 from .web import add_web_routes
 from .smart_scheduler import SmartScheduler
 from .auto_search_manager import AutoSearchManager
+from .portal_integration import PortalIntegration
+from .approval_system import ApprovalSystem, PendingJob
 from datetime import datetime
 from loguru import logger
 import os
@@ -18,6 +20,8 @@ add_web_routes(app)
 # Inicializar componentes inteligentes
 smart_scheduler = SmartScheduler()
 search_manager = AutoSearchManager()
+portal_integration = PortalIntegration()
+approval_system = ApprovalSystem()
 
 class ScrapeRequest(BaseModel):
     sites: List[str] = ["infojobs"]
@@ -58,7 +62,7 @@ async def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
             if "infojobs" in request.sites:
                 jobs.extend(scraper.scrape_infojobs(keyword, request.days_back))
             
-            # Save jobs to database
+            # Save jobs to database and approval system
             new_jobs = []
             for job in jobs:
                 existing = db.query(ScrapedJob).filter(ScrapedJob.link == job['link']).first()
@@ -72,6 +76,12 @@ async def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
                     new_jobs.append(job)
             
             db.commit()
+            
+            # Adicionar para sistema de aprovação
+            if new_jobs:
+                approval_result = approval_system.add_jobs_for_review(new_jobs, db)
+                logger.info(f"Aprovação: {approval_result}")
+            
             all_jobs.extend(new_jobs)
             
             # Update run status
@@ -134,3 +144,67 @@ async def execute_high_priority_now():
     searches = search_manager.get_high_priority_searches()
     await smart_scheduler._execute_batch_search(searches)
     return {"executed_searches": len(searches), "status": "completed"}
+
+@app.post("/api/portal-integration/send-jobs")
+async def send_jobs_to_portal(job_ids: List[int] = None, auto_approve: bool = False, db: Session = Depends(get_db)):
+    """Enviar vagas aprovadas para o portal principal"""
+    if job_ids:
+        # Enviar vagas específicas
+        jobs_data = []
+        for job_id in job_ids:
+            job = db.query(PendingJob).filter(PendingJob.id == job_id).first()
+            if job and job.status == "approved":
+                jobs_data.append({
+                    'title': job.title,
+                    'company': job.company,
+                    'location': job.location,
+                    'source': job.source,
+                    'link': job.link,
+                    'quality_score': job.quality_score
+                })
+    else:
+        # Enviar todas as vagas aprovadas
+        approved_jobs = approval_system.get_approved_jobs(db)
+        jobs_data = [{
+            'title': job.title,
+            'company': job.company,
+            'location': job.location,
+            'source': job.source,
+            'link': job.link,
+            'quality_score': job.quality_score
+        } for job in approved_jobs]
+    
+    result = portal_integration.send_jobs_to_portal(jobs_data, auto_approve)
+    return result
+
+@app.get("/api/approval/pending")
+async def get_pending_jobs(limit: int = 50, db: Session = Depends(get_db)):
+    """Listar vagas pendentes de aprovação"""
+    jobs = approval_system.get_pending_jobs(db, limit)
+    return [{
+        'id': job.id,
+        'title': job.title,
+        'company': job.company,
+        'location': job.location,
+        'source': job.source,
+        'link': job.link,
+        'quality_score': job.quality_score,
+        'scraped_at': job.scraped_at
+    } for job in jobs]
+
+@app.post("/api/approval/approve")
+async def approve_jobs(job_ids: List[int], reviewer: str = "admin", db: Session = Depends(get_db)):
+    """Aprovar vagas em lote"""
+    result = approval_system.approve_jobs(job_ids, reviewer, db)
+    return result
+
+@app.post("/api/approval/reject")
+async def reject_jobs(job_ids: List[int], reason: str, reviewer: str = "admin", db: Session = Depends(get_db)):
+    """Rejeitar vagas em lote"""
+    result = approval_system.reject_jobs(job_ids, reason, reviewer, db)
+    return result
+
+@app.get("/api/approval/stats")
+async def get_approval_stats(db: Session = Depends(get_db)):
+    """Estatísticas do sistema de aprovação"""
+    return approval_system.get_approval_stats(db)
